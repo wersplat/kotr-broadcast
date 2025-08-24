@@ -39,3 +39,13 @@ export type Recap = {
 	snippet: string;
 	thumbnailUrl?: string;
 };
+
+export type Match = {
+	id: string;
+	status?: string;
+	homeTeamId?: string;
+	awayTeamId?: string;
+	homeScore?: number;
+	awayScore?: number;
+	scheduledAt?: string; // ISO date
+};

@@ -4,83 +4,67 @@ import teamsJson from "@/data/mock.teams.json";
 import leadersJson from "@/data/mock.leaders.json";
 import notablesJson from "@/data/mock.notables.json";
 import recapsJson from "@/data/mock.recaps.json";
-import type { LeaderRow, Notable, Player, Recap, Team } from "./types";
+import type { LeaderRow, Notable, Player, Recap, Team, Match } from "./types";
 import { createClient } from "./supabase";
 import { DEFAULT_TOURNAMENT_ID } from "./config";
 
 type RosterRow = {
-	player_id: string;
-	gamertag?: string | null;
-	player_name?: string | null;
-	team_id?: string | null;
-	position?: string | null;
-	tournament_id: string;
+	player_id: string | null;
+	gamertag: string | null;
+	team_id: string | null;
+	position: string | null;
+	tournament_id: string | null;
 };
 
-type TeamStatsRow = {
-	team_id: string;
-	team_name: string;
-	team_abbrev?: string | null;
-	wins?: number | null; // optional alternate name for wins
-	losses?: number | null;
-	wins2?: number | null; // optional alternate name for wins
-	/** Required key */
-	tournament_id: string;
-	/** Canonical field if present */
-	wins_actual?: number | null;
-	/** Canonical wins field */
-	wins_real?: number | null;
-	/** Preferred canonical wins field */
-	wins_primary?: number | null;
-	/** Standard wins field */
-	wins_std?: number | null;
-	/** The real wins field we will try to read: */
-	wins_final?: number | null;
-	/** Real wins */
-	wins_truewins?: number | null;
-	/** The actual wins key we expect most: */
-	wins_count?: number | null;
-	/** Fallback wins */
-	/***/
-	/** Ultimately we only read `wins` and `losses` when present */
+// Removed unused TeamStatsRow (replaced by teams + rosters)
+
+type TeamTableRow = {
+	id: string | null;
+	name: string | null;
+	abbrev: string | null;
+	logo_url: string | null;
 };
 
-type TopPerformerRow = {
-	metric: string;
-	player_id: string;
-	value: number | null;
-	unit?: string | null;
-	tournament_id: string;
+type PlayerAggRow = {
+	player_id: string | null;
+	avg_points: number | null;
+	avg_assists: number | null;
+	avg_rebounds: number | null;
+	avg_steals: number | null;
+	avg_blocks: number | null;
+	tournament_id: string | null;
 };
 
 type NotableRow = {
-	id: string;
-	title: string;
-	description: string;
-	value?: string | null;
-	player_id?: string | null;
-	team_id?: string | null;
-	tournament_id: string;
+	id: string | null;
+	title: string | null;
+	description: string | null;
+	value: string | null;
+	player_id: string | null;
+	team_id: string | null;
+	tournament_id: string | null;
 };
 
 type RecapRow = {
-	id: string;
-	match_id: string;
-	title: string;
-	published_at: string;
-	snippet: string;
-	thumbnail_url?: string | null;
-	tournament_id: string;
+	id: string | null;
+	match_id: string | null;
+	title: string | null;
+	published_at: string | null;
+	snippet: string | null;
+	thumbnail_url: string | null;
+	tournament_id: string | null;
 };
 
-type PlayerStatsAggRow = {
-	player_id: string;
-	tournament_id: string;
-	points?: number | null;
-	assists?: number | null;
-	rebounds?: number | null;
-	steals?: number | null;
-	blocks?: number | null;
+// Removed unused PlayerStatsAggRow
+
+type PlayerStatsTotalsRow = {
+	player_id: string | null;
+	tournament_id: string | null;
+	total_points: number | null;
+	total_assists: number | null;
+	total_rebounds: number | null;
+	total_steals: number | null;
+	total_blocks: number | null;
 };
 
 export const getPlayers = cache(async (): Promise<Player[]> => {
@@ -89,12 +73,13 @@ export const getPlayers = cache(async (): Promise<Player[]> => {
 	try {
 		const { data, error } = await client
 			.from("tournament_team_rosters")
-			.select("player_id, gamertag, player_name, team_id, position, tournament_id")
+			.select("player_id, gamertag, team_id, position, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
 		if (error || !data) return playersJson as unknown as Player[];
-		const players: Player[] = data.map((row: RosterRow) => ({
-			id: row.player_id,
-			name: row.gamertag ?? row.player_name ?? "",
+		const rows = (data as unknown) as RosterRow[];
+		const players: Player[] = rows.filter(r => !!r.player_id).map((row) => ({
+			id: row.player_id as string,
+			name: row.gamertag ?? "",
 			teamId: row.team_id ?? "",
 			position: row.position ?? undefined,
 		}));
@@ -108,16 +93,27 @@ export const getTeams = cache(async (): Promise<Team[]> => {
 	const client = createClient();
 	if (!client) return teamsJson as unknown as Team[];
 	try {
-		const { data, error } = await client
-			.from("tournament_team_stats")
-			.select("team_id, team_name, team_abbrev, wins, losses, tournament_id")
+		// 1) Find tournament team ids from rosters view
+		const rosterRes = await client
+			.from("tournament_team_rosters")
+			.select("team_id, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
-		if (error || !data) return teamsJson as unknown as Team[];
-		const teams: Team[] = data.map((row: TeamStatsRow) => ({
-			id: row.team_id,
-			name: row.team_name,
-			abbrev: row.team_abbrev ?? row.team_name?.slice(0, 3)?.toUpperCase() ?? "",
-			record: row.wins != null && row.losses != null ? `${row.wins}-${row.losses}` : undefined,
+		const rosterRows = ((rosterRes as unknown) as { data: RosterRow[] | null }).data ?? [];
+		const teamIds = Array.from(new Set(rosterRows.map(r => r.team_id).filter((v): v is string => !!v)));
+		if (teamIds.length === 0) return teamsJson as unknown as Team[];
+
+		// 2) Load team info from teams table
+		const { data: teamsData, error: teamsError } = await client
+			.from("teams")
+			.select("id, name, abbrev, logo_url")
+			.in("id", teamIds);
+		if (teamsError || !teamsData) return teamsJson as unknown as Team[];
+		const trows = (teamsData as unknown) as TeamTableRow[];
+		const teams: Team[] = trows.filter(r => !!r.id).map((row) => ({
+			id: row.id as string,
+			name: row.name ?? "",
+			abbrev: row.abbrev ?? (row.name?.slice(0, 3)?.toUpperCase() ?? ""),
+			logoUrl: row.logo_url ?? undefined,
 		}));
 		return teams;
 	} catch {
@@ -130,29 +126,30 @@ export const getLeaders = cache(async (): Promise<LeaderRow[]> => {
 	if (!client) return leadersJson as unknown as LeaderRow[];
 	try {
 		const { data, error } = await client
-			.from("top_tournament_performers")
-			.select("metric, player_id, value, unit, tournament_id")
-			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
-			.order("value", { ascending: false });
+			.from("tournament_player_stats")
+			.select("player_id, avg_points, avg_assists, avg_rebounds, avg_steals, avg_blocks, tournament_id")
+			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
 		if (error || !data) return leadersJson as unknown as LeaderRow[];
-		// Group rows by metric and build LeaderRow with arrays
-		const byMetric = new Map<string, { leaderIds: string[]; values: number[]; unit?: string }>();
-		for (const row of data as TopPerformerRow[]) {
-			const key: string = row.metric;
-			const existing: { leaderIds: string[]; values: number[]; unit?: string } =
-				byMetric.get(key) ?? { leaderIds: [], values: [], unit: row.unit ?? undefined };
-			existing.leaderIds.push(row.player_id);
-			existing.values.push(Number(row.value ?? 0));
-			existing.unit = existing.unit ?? (row.unit ?? undefined);
-			byMetric.set(key, existing);
+		const rows = (data as unknown) as PlayerAggRow[];
+		function top(metricKey: keyof PlayerAggRow, label: string, unit?: string): LeaderRow {
+			const sorted = [...rows]
+				.filter(r => (r[metricKey] as number | null) != null && r.player_id)
+				.sort((a, b) => Number((b[metricKey] as number | null) ?? 0) - Number((a[metricKey] as number | null) ?? 0))
+				.slice(0, 5);
+			return {
+				metric: label,
+				leaderIds: sorted.map(r => r.player_id as string),
+				values: sorted.map(r => Number((r[metricKey] as number | null) ?? 0)),
+				unit,
+			};
 		}
-		const leaders: LeaderRow[] = Array.from(byMetric.entries()).map(([metric, agg]) => ({
-			metric,
-			leaderIds: agg.leaderIds,
-			values: agg.values,
-			unit: agg.unit,
-		}));
-		return leaders;
+		return [
+			top("avg_points", "Points", "ppg"),
+			top("avg_assists", "Assists", "apg"),
+			top("avg_rebounds", "Rebounds", "rpg"),
+			top("avg_steals", "Steals", "spg"),
+			top("avg_blocks", "Blocks", "bpg"),
+		];
 	} catch {
 		return leadersJson as unknown as LeaderRow[];
 	}
@@ -167,10 +164,11 @@ export const getNotables = cache(async (): Promise<Notable[]> => {
 			.select("id, title, description, value, player_id, team_id, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
 		if (error || !data) return notablesJson as unknown as Notable[];
-		const notables: Notable[] = data.map((row: NotableRow) => ({
-			id: row.id,
-			title: row.title,
-			description: row.description,
+		const rows = (data as unknown) as NotableRow[];
+		const notables: Notable[] = rows.filter(r => !!r.id).map((row) => ({
+			id: row.id as string,
+			title: row.title ?? "",
+			description: row.description ?? "",
 			value: row.value ?? undefined,
 			playerId: row.player_id ?? undefined,
 			teamId: row.team_id ?? undefined,
@@ -192,12 +190,13 @@ export const getRecaps = cache(async (): Promise<Recap[]> => {
 			.order("published_at", { ascending: false })
 			.limit(20);
 		if (error || !data) return recapsJson as unknown as Recap[];
-		const recaps: Recap[] = data.map((row: RecapRow) => ({
-			id: row.id,
-			matchId: row.match_id,
-			title: row.title,
-			publishedAt: row.published_at,
-			snippet: row.snippet,
+		const rows = (data as unknown) as RecapRow[];
+		const recaps: Recap[] = rows.filter(r => !!r.id && !!r.match_id).map((row) => ({
+			id: row.id as string,
+			matchId: row.match_id as string,
+			title: row.title ?? "",
+			publishedAt: row.published_at ?? "",
+			snippet: row.snippet ?? "",
 			thumbnailUrl: row.thumbnail_url ?? undefined,
 		}));
 		return recaps;
@@ -215,7 +214,7 @@ export const getPlayerById = cache(async (id: string): Promise<Player | undefine
 	try {
 		const { data, error } = await client
 			.from("tournament_team_rosters")
-			.select("player_id, gamertag, player_name, team_id, position, tournament_id")
+			.select("player_id, gamertag, team_id, position, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
 			.eq("player_id", id)
 			.single();
@@ -225,25 +224,28 @@ export const getPlayerById = cache(async (id: string): Promise<Player | undefine
 		try {
 			const statsRes = await client
 				.from("tournament_player_stats")
-				.select("player_id, tournament_id, points, assists, rebounds, steals, blocks")
+				.select("player_id, tournament_id, total_points, total_assists, total_rebounds, total_steals, total_blocks")
 				.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
 				.eq("player_id", id)
 				.single();
-			if (!statsRes.error && statsRes.data) {
+			const sdata = ((statsRes as unknown) as { data: PlayerStatsTotalsRow | null }).data;
+			if (sdata) {
 				stats = {
-					points: Number(statsRes.data.points ?? 0),
-					assists: Number(statsRes.data.assists ?? 0),
-					rebounds: Number(statsRes.data.rebounds ?? 0),
-					steals: Number(statsRes.data.steals ?? 0),
-					blocks: Number(statsRes.data.blocks ?? 0),
+					points: Number(sdata.total_points ?? 0),
+					assists: Number(sdata.total_assists ?? 0),
+					rebounds: Number(sdata.total_rebounds ?? 0),
+					steals: Number(sdata.total_steals ?? 0),
+					blocks: Number(sdata.total_blocks ?? 0),
 				};
 			}
 		} catch {}
+		const prow = (data as unknown) as RosterRow;
+		if (!prow.player_id) return undefined;
 		return {
-			id: data.player_id,
-			name: data.gamertag ?? data.player_name ?? "",
-			teamId: data.team_id ?? "",
-			position: data.position ?? undefined,
+			id: prow.player_id,
+			name: prow.gamertag ?? "",
+			teamId: prow.team_id ?? "",
+			position: prow.position ?? undefined,
 			stats,
 		};
 	} catch {
@@ -259,19 +261,103 @@ export const getTeamById = cache(async (id: string): Promise<Team | undefined> =
 	}
 	try {
 		const { data, error } = await client
-			.from("tournament_team_stats")
-			.select("team_id, team_name, team_abbrev, wins, losses, tournament_id")
-			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
-			.eq("team_id", id)
+			.from("teams")
+			.select("id, name, abbrev, logo_url")
+			.eq("id", id)
 			.single();
 		if (error || !data) return undefined;
+		const trow = (data as unknown) as TeamTableRow;
+		if (!trow.id) return undefined;
 		return {
-			id: data.team_id,
-			name: data.team_name,
-			abbrev: data.team_abbrev ?? data.team_name?.slice(0, 3)?.toUpperCase() ?? "",
-			record: data.wins != null && data.losses != null ? `${data.wins}-${data.losses}` : undefined,
+			id: trow.id,
+			name: trow.name ?? "",
+			abbrev: trow.abbrev ?? trow.name?.slice(0, 3)?.toUpperCase() ?? "",
+			logoUrl: trow.logo_url ?? undefined,
 		};
 	} catch {
 		return undefined;
 	}
+});
+
+// Matches: fetch from `matches` table if available. Fallback: synthesize minimal mock.
+type MatchRow = {
+	 id: string | null;
+	 status: string | null;
+	 home_team_id: string | null;
+	 away_team_id: string | null;
+	 home_score: number | null;
+	 away_score: number | null;
+	 scheduled_at: string | null;
+};
+
+export const getMatchById = cache(async (id: string): Promise<Match | undefined> => {
+	const client = createClient();
+	if (!client) return undefined;
+	try {
+		const { data, error } = await client
+			.from("matches")
+			.select("id, status, home_team_id, away_team_id, home_score, away_score, scheduled_at")
+			.eq("id", id)
+			.single();
+		if (error || !data) return undefined;
+		const row = (data as unknown) as MatchRow;
+		if (!row.id) return undefined;
+		return {
+			id: row.id,
+			status: row.status ?? undefined,
+			homeTeamId: row.home_team_id ?? undefined,
+			awayTeamId: row.away_team_id ?? undefined,
+			homeScore: row.home_score ?? undefined,
+			awayScore: row.away_score ?? undefined,
+			scheduledAt: row.scheduled_at ?? undefined,
+		};
+	} catch {
+		return undefined;
+	}
+});
+
+export const getMatches = cache(async (): Promise<Match[]> => {
+    const client = createClient();
+    if (!client) return [];
+    try {
+        const { data, error } = await client
+            .from("matches")
+            .select("id, status, home_team_id, away_team_id, home_score, away_score, scheduled_at")
+            .order("scheduled_at", { ascending: false })
+            .limit(50);
+        if (error || !data) return [];
+        const rows = (data as unknown) as MatchRow[];
+        return rows.filter(r => !!r.id).map(row => ({
+            id: row.id as string,
+            status: row.status ?? undefined,
+            homeTeamId: row.home_team_id ?? undefined,
+            awayTeamId: row.away_team_id ?? undefined,
+            homeScore: row.home_score ?? undefined,
+            awayScore: row.away_score ?? undefined,
+            scheduledAt: row.scheduled_at ?? undefined,
+        }));
+    } catch {
+        return [];
+    }
+});
+
+export type MatchPeriod = { period: number; home: number; away: number };
+
+export const getMatchPeriods = cache(async (matchId: string): Promise<MatchPeriod[]> => {
+    const client = createClient();
+    if (!client) return [];
+    try {
+        const { data, error } = await client
+            .from("match_periods")
+            .select("match_id, period_number, home_score, away_score")
+            .eq("match_id", matchId)
+            .order("period_number", { ascending: true });
+        if (error || !data) return [];
+        const rows = (data as unknown) as { match_id: string | null; period_number: number | null; home_score: number | null; away_score: number | null }[];
+        return rows
+            .filter(r => (r.period_number as number | null) != null)
+            .map(r => ({ period: Number(r.period_number), home: Number(r.home_score ?? 0), away: Number(r.away_score ?? 0) }));
+    } catch {
+        return [];
+    }
 });

@@ -1,10 +1,11 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/preflight";
+@import "tailwindcss/utilities";
 
 :root {
 	--background: #0b0b10;
 	--foreground: #e6e8eb;
+	--accent: #60a5fa; /* sky-400 */
+	--accent-foreground: #0b1220;
 }
 
 html, body {
@@ -14,11 +15,43 @@ html, body {
 body {
 	background-color: var(--background);
 	color: var(--foreground);
+	font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+	line-height: 1.6;
 }
 
 @media (prefers-color-scheme: light) {
 	:root {
 		--background: #ffffff;
 		--foreground: #111827;
+		--accent: #2563eb; /* blue-600 */
+		--accent-foreground: #ffffff;
 	}
+}
+
+/* Improve basic UX affordances */
+a {
+	color: inherit;
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+
+::selection {
+	background: var(--accent);
+	color: var(--accent-foreground);
+}
+
+/* Focus visibility for keyboard users */
+:where(a, button, input, textarea, select):focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 6px;
+}
+
+/* Subtle card styling for surfaces used across the app */
+.card-base {
+	border-radius: 0.5rem;
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	background-color: rgba(255, 255, 255, 0.05);
 }
