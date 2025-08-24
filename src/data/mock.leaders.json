@@ -1,0 +1,4 @@
+[
+	{ "metric": "Points", "leaderIds": ["p1", "p2"], "values": [24, 18], "unit": "pts" },
+	{ "metric": "Rebounds", "leaderIds": ["p2", "p1"], "values": [9, 5], "unit": "reb" }
+]
