@@ -1,0 +1,18 @@
+[
+	{
+		"id": "p1",
+		"name": "Alex Carter",
+		"teamId": "t1",
+		"position": "G",
+		"jerseyNumber": 3,
+		"stats": { "pts": 24, "ast": 7, "reb": 5 }
+	},
+	{
+		"id": "p2",
+		"name": "Riley James",
+		"teamId": "t2",
+		"position": "F",
+		"jerseyNumber": 12,
+		"stats": { "pts": 18, "ast": 3, "reb": 9 }
+	}
+]
