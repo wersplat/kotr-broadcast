@@ -49,11 +49,15 @@ pnpm cf:deploy
 
 `wrangler.toml` sets `pages_build_output_dir = ".vercel/output"`.
 
-## Supabase wiring (later)
-- Replace `src/lib/supabase.ts` with a real client:
-  - Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - Swap mock loaders in `src/lib/data.ts` for Supabase queries (or views)
-- Keep the interfaces in `src/lib/types.ts` consistent with your views.
+## Supabase
+This app uses a real Supabase client.
+
+- Set environment variables in your shell or Pages project:
+  - `NEXT_PUBLIC_SUPABASE_URL` (e.g. `https://qwpxsufrgigpjcxtnery.supabase.co`)
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (from Supabase project settings)
+- The app is currently hardcoded to tournament `0880ac2b-6d8d-4849-a22e-c1c32132e6c3` via `src/lib/config.ts`.
+- Data loaders in `src/lib/data.ts` query tournament views when available and fall back to mock JSON when env vars are not set or queries fail.
+- An optional `rpc('list_tables')` is attempted for schema introspection.
 
 ## Typed routes
 `next.config.mjs` sets `experimental.typedRoutes = true`.
