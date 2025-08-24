@@ -1,13 +1,14 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "./database.types";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-export function createClient(): SupabaseClient | null {
+export function createClient(): SupabaseClient<Database> | null {
 	if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 		return null;
 	}
-	return createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+	return createSupabaseClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
 		global: {
 			headers: {
 				"x-client-info": "kotr-broadcast",

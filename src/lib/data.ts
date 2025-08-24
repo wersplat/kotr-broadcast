@@ -87,7 +87,7 @@ export const getPlayers = cache(async (): Promise<Player[]> => {
 	const client = createClient();
 	if (!client) return playersJson as unknown as Player[];
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_team_rosters")
 			.select("player_id, gamertag, player_name, team_id, position, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
@@ -108,7 +108,7 @@ export const getTeams = cache(async (): Promise<Team[]> => {
 	const client = createClient();
 	if (!client) return teamsJson as unknown as Team[];
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_team_stats")
 			.select("team_id, team_name, team_abbrev, wins, losses, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
@@ -129,7 +129,7 @@ export const getLeaders = cache(async (): Promise<LeaderRow[]> => {
 	const client = createClient();
 	if (!client) return leadersJson as unknown as LeaderRow[];
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("top_tournament_performers")
 			.select("metric, player_id, value, unit, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
@@ -162,7 +162,7 @@ export const getNotables = cache(async (): Promise<Notable[]> => {
 	const client = createClient();
 	if (!client) return notablesJson as unknown as Notable[];
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_notables_view")
 			.select("id, title, description, value, player_id, team_id, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID);
@@ -185,7 +185,7 @@ export const getRecaps = cache(async (): Promise<Recap[]> => {
 	const client = createClient();
 	if (!client) return recapsJson as unknown as Recap[];
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_recaps_view")
 			.select("id, match_id, title, published_at, snippet, thumbnail_url, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
@@ -213,7 +213,7 @@ export const getPlayerById = cache(async (id: string): Promise<Player | undefine
 		return players.find(p => p.id === id);
 	}
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_team_rosters")
 			.select("player_id, gamertag, player_name, team_id, position, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
@@ -223,7 +223,7 @@ export const getPlayerById = cache(async (id: string): Promise<Player | undefine
 		// Try to enrich with tournament_player_stats aggregates
 		let stats: Record<string, number> | undefined = undefined;
 		try {
-			const statsRes = await (client as any)
+			const statsRes = await client
 				.from("tournament_player_stats")
 				.select("player_id, tournament_id, points, assists, rebounds, steals, blocks")
 				.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
@@ -258,7 +258,7 @@ export const getTeamById = cache(async (id: string): Promise<Team | undefined> =
 		return teams.find(t => t.id === id);
 	}
 	try {
-		const { data, error } = await (client as any)
+		const { data, error } = await client
 			.from("tournament_team_stats")
 			.select("team_id, team_name, team_abbrev, wins, losses, tournament_id")
 			.eq("tournament_id", DEFAULT_TOURNAMENT_ID)
